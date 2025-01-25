@@ -1,0 +1,94 @@
+import board
+import pulseio
+import adafruit_irremote
+import usb_hid
+from adafruit_hid.keyboard import Keyboard
+from adafruit_hid.keycode import Keycode
+import time
+import digitalio
+
+# Initialize the HID Keyboard
+keyboard = Keyboard(usb_hid.devices)
+
+# Define a dictionary mapping IR codes (button IDs) to button labels and keyboard actions
+BUTTON_CODES = {
+    (0, 255, 162, 93): {"label": "1", "keys": [Keycode.CONTROL, Keycode.ALT, Keycode.ONE]},
+    (0, 255, 98, 157): {"label": "2", "keys": [Keycode.CONTROL, Keycode.ALT, Keycode.TWO]},
+    (0, 255, 226, 29): {"label": "3", "keys": [Keycode.CONTROL, Keycode.ALT, Keycode.THREE]},
+    (0, 255, 34, 221): {"label": "4", "keys": [Keycode.CONTROL, Keycode.ALT, Keycode.FOUR]},
+    (0, 255, 2, 253): {"label": "5", "keys": [Keycode.CONTROL, Keycode.ALT, Keycode.FIVE]},
+    (0, 255, 194, 61): {"label": "6", "keys": [Keycode.CONTROL, Keycode.ALT, Keycode.SIX]},
+    (0, 255, 224, 31): {"label": "7", "keys": [Keycode.CONTROL, Keycode.ALT, Keycode.SEVEN]},
+    (0, 255, 168, 87): {"label": "8", "keys": [Keycode.CONTROL, Keycode.ALT, Keycode.EIGHT]},
+    (0, 255, 144, 111): {"label": "9", "keys": [Keycode.CONTROL, Keycode.ALT, Keycode.NINE]},
+    (0, 255, 104, 151): {"label": "*", "keys": [Keycode.CONTROL, Keycode.ALT, Keycode.SHIFT, Keycode.EIGHT]},
+    (0, 255, 152, 103): {"label": "0", "keys": [Keycode.CONTROL, Keycode.ALT, Keycode.ZERO]},
+    (0, 255, 176, 79): {"label": "#", "keys": [Keycode.CONTROL, Keycode.ALT, Keycode.SHIFT, Keycode.THREE]},
+    (0, 255, 24, 231): {"label": "Up", "keys": [Keycode.CONTROL, Keycode.SHIFT, Keycode.UP_ARROW]},      
+    (0, 255, 16, 239): {"label": "Left", "keys": [Keycode.CONTROL, Keycode.SHIFT, Keycode.LEFT_ARROW]}, 
+    (0, 255, 56, 199): {"label": "Ok", "keys": [Keycode.CONTROL, Keycode.ALT, Keycode.ENTER]},                   
+    (0, 255, 90, 165): {"label": "Right", "keys": [Keycode.CONTROL, Keycode.SHIFT, Keycode.RIGHT_ARROW]}, 
+    (0, 255, 74, 181): {"label": "Down", "keys": [Keycode.CONTROL, Keycode.SHIFT, Keycode.DOWN_ARROW]},   
+}
+
+# Initialize the PulseIn object on the correct pin (e.g., GP2)
+pulsein = pulseio.PulseIn(board.GP2, maxlen=120, idle_state=True)
+
+# Initialize the IR decoder
+decoder = adafruit_irremote.GenericDecode()
+
+# Optional: Initialize an LED for visual feedback on GP0 (change pin as needed)
+led = digitalio.DigitalInOut(board.GP0)
+led.direction = digitalio.Direction.OUTPUT
+
+print("IR Remote Shortcut Keypad Ready...")
+
+while True:
+    try:
+        # Read pulses from the IR receiver
+        pulses = decoder.read_pulses(pulsein)
+
+        # Decode the pulses to get the IR code
+        code = decoder.decode_bits(pulses)
+
+        # Convert the code to a tuple for dictionary lookup
+        code_tuple = tuple(code)
+
+        # Look up the button details for the received code
+        button = BUTTON_CODES.get(code_tuple, None)
+
+        if button:
+            button_label = button["label"]
+            key_combo = button["keys"]
+
+            # Log the button label and its ID
+            print(f"Button Pressed: {button_label} (ID: {code_tuple})")
+
+            # Blink the LED to indicate action (optional)
+            for _ in range(2):
+                led.value = True
+                time.sleep(0.05)
+                led.value = False
+                time.sleep(0.05)
+
+            if key_combo:
+                # Press the keys
+                keyboard.press(*key_combo)
+                time.sleep(0.1)  # Hold keys for 100ms
+                # Release the keys
+                keyboard.release_all()
+
+            # Optional: Delay to prevent multiple triggers from a single press
+            time.sleep(0.2)
+        else:
+            # Unknown code; log the button ID
+            print(f"Unknown IR Button ID: {code_tuple}")
+
+    except adafruit_irremote.IRNECRepeatException:
+        # Handle repeat signals if needed
+        print("IR code repeated!")
+
+    except adafruit_irremote.IRDecodeException as e:
+        # Handle failed decodings
+        print("Failed to decode IR signal:", e)
+
